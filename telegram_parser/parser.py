@@ -1,39 +1,69 @@
-import os
 import asyncio
+import json
+import os
+
 from telethon import TelegramClient
 
-API_ID = int(os.environ.get("API_ID", "0"))
-API_HASH = os.environ.get("API_HASH", "")
 
+OPTIONS_FILE = "/data/options.json"
 SESSION_FILE = "/data/telegram_parser"
 
-async def main():
-    print("========================================")
-    print(" Telegram Channel Parser")
-    print("========================================")
 
-    if not API_ID or not API_HASH:
-        print("ОШИБКА: API_ID или API_HASH не указаны")
+def load_options():
+    with open(OPTIONS_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+async def main():
+    print("=" * 50)
+    print(" Telegram Channel Parser")
+    print("=" * 50)
+
+    options = load_options()
+
+    api_id = int(options.get("api_id", 0))
+    api_hash = options.get("api_hash", "")
+
+    if not api_id:
+        print("ОШИБКА: api_id не указан")
         return
 
-    print(f"API ID: {API_ID}")
-    print("Запускаем Telegram Client...")
+    if not api_hash:
+        print("ОШИБКА: api_hash не указан")
+        return
+
+    print(f"API ID: {api_id}")
+    print("Запуск Telegram Client...")
+    print()
+    print("При первом запуске Telegram может запросить:")
+    print("1. Номер телефона")
+    print("2. Код подтверждения")
+    print("3. Пароль 2FA")
+    print()
 
     client = TelegramClient(
         SESSION_FILE,
-        API_ID,
-        API_HASH
+        api_id,
+        api_hash
     )
 
     await client.start()
 
     me = await client.get_me()
 
-    print("----------------------------------------")
-    print("Telegram авторизован!")
-    print(f"Аккаунт: {me.first_name} {me.last_name or ''}")
-    print(f"Username: @{me.username}" if me.username else "Username: отсутствует")
-    print("----------------------------------------")
+    print("=" * 50)
+    print(" TELEGRAM АВТОРИЗОВАН")
+    print("=" * 50)
+    print(f"Имя: {me.first_name or ''} {me.last_name or ''}")
+
+    if me.username:
+        print(f"Username: @{me.username}")
+
+    print(f"ID: {me.id}")
+    print()
+    print("Session сохранена.")
+    print("Повторная авторизация при перезапуске не потребуется.")
+    print("=" * 50)
 
     await client.run_until_disconnected()
 
