@@ -2,6 +2,8 @@ import asyncio
 import html
 import json
 import sys
+import urllib.parse
+import urllib.request
 
 from telethon import TelegramClient, events
 
@@ -11,12 +13,58 @@ SESSION_FILE = "/data/telegram_parser"
 
 
 def load_options():
-    with open(OPTIONS_FILE, "r", encoding="utf-8") as f:
+
+    with open(
+        OPTIONS_FILE,
+        "r",
+        encoding="utf-8",
+    ) as f:
+
         return json.load(f)
 
 
 def normalize_text(text):
-    return " ".join(text.lower().split())
+
+    return " ".join(
+        text.lower().split()
+    )
+
+
+async def send_telegram_message(
+    bot_token,
+    chat_id,
+    message,
+):
+
+    url = (
+        f"https://api.telegram.org/"
+        f"bot{bot_token}/sendMessage"
+    )
+
+    data = urllib.parse.urlencode(
+        {
+            "chat_id": chat_id,
+            "text": message,
+            "parse_mode": "HTML",
+        }
+    ).encode("utf-8")
+
+    def send():
+
+        request = urllib.request.Request(
+            url,
+            data=data,
+            method="POST",
+        )
+
+        with urllib.request.urlopen(
+            request,
+            timeout=15,
+        ) as response:
+
+            return response.read()
+
+    await asyncio.to_thread(send)
 
 
 async def main():
@@ -27,41 +75,73 @@ async def main():
 
     options = load_options()
 
-    api_id = int(options.get("api_id", 0))
-    api_hash = options.get("api_hash", "")
+    api_id = int(
+        options.get("api_id", 0)
+    )
 
-    bot_token = options.get("bot_token", "")
-    chat_id = int(options.get("chat_id", 0))
+    api_hash = options.get(
+        "api_hash",
+        "",
+    )
 
-    channels = options.get("channels", [])
-    keywords = options.get("keywords", [])
+    bot_token = options.get(
+        "bot_token",
+        "",
+    )
 
-    # ---------------------------------------------------------
+    chat_id = int(
+        options.get("chat_id", 0)
+    )
+
+    channels = options.get(
+        "channels",
+        [],
+    )
+
+    keywords = options.get(
+        "keywords",
+        [],
+    )
+
     # Проверка настроек
-    # ---------------------------------------------------------
 
     if not api_id:
-        print("ОШИБКА: api_id не указан", flush=True)
+
+        print(
+            "ОШИБКА: api_id не указан",
+            flush=True,
+        )
+
         sys.exit(1)
 
     if not api_hash:
-        print("ОШИБКА: api_hash не указан", flush=True)
+
+        print(
+            "ОШИБКА: api_hash не указан",
+            flush=True,
+        )
+
         sys.exit(1)
 
     if not channels:
-        print("ОШИБКА: список channels пуст", flush=True)
+
+        print(
+            "ОШИБКА: список channels пуст",
+            flush=True,
+        )
+
         sys.exit(1)
 
     if not keywords:
+
         print(
             "ОШИБКА: список keywords пуст",
             flush=True,
         )
+
         sys.exit(1)
 
-    # ---------------------------------------------------------
     # Вывод конфигурации
-    # ---------------------------------------------------------
 
     print(
         f"API ID: {api_id}",
@@ -96,9 +176,7 @@ async def main():
 
     print()
 
-    # ---------------------------------------------------------
     # Telegram Client
-    # ---------------------------------------------------------
 
     client = TelegramClient(
         SESSION_FILE,
@@ -116,16 +194,21 @@ async def main():
         )
 
         await client.disconnect()
+
         sys.exit(1)
 
     me = await client.get_me()
 
     print("=" * 60, flush=True)
-    print(" TELEGRAM ПОДКЛЮЧЕН", flush=True)
+    print(
+        " TELEGRAM ПОДКЛЮЧЕН",
+        flush=True,
+    )
     print("=" * 60, flush=True)
 
     print(
-        f"Имя: {(me.first_name or '')} {(me.last_name or '')}",
+        f"Имя: {(me.first_name or '')} "
+        f"{(me.last_name or '')}",
         flush=True,
     )
 
@@ -143,9 +226,7 @@ async def main():
 
     print()
 
-    # ---------------------------------------------------------
     # Подключаем каналы
-    # ---------------------------------------------------------
 
     channel_entities = []
 
@@ -159,9 +240,12 @@ async def main():
         channel = channel.strip()
 
         if not channel:
+
             continue
 
-        if channel.startswith("https://t.me/"):
+        if channel.startswith(
+            "https://t.me/"
+        ):
 
             channel = channel.replace(
                 "https://t.me/",
@@ -178,7 +262,9 @@ async def main():
                 channel
             )
 
-            channel_entities.append(entity)
+            channel_entities.append(
+                entity
+            )
 
             title = getattr(
                 entity,
@@ -194,7 +280,9 @@ async def main():
 
             if username:
 
-                display_name = f"@{username}"
+                display_name = (
+                    f"@{username}"
+                )
 
             elif title:
 
@@ -205,7 +293,8 @@ async def main():
                 display_name = channel
 
             print(
-                f"✓ Канал подключен: {display_name}",
+                f"✓ Канал подключен: "
+                f"{display_name}",
                 flush=True,
             )
 
@@ -222,16 +311,16 @@ async def main():
 
         print()
         print(
-            "ОШИБКА: ни один канал не подключен.",
+            "ОШИБКА: ни один канал "
+            "не подключен.",
             flush=True,
         )
 
         await client.disconnect()
+
         sys.exit(1)
 
-    # ---------------------------------------------------------
     # Обработчик новых сообщений
-    # ---------------------------------------------------------
 
     @client.on(
         events.NewMessage(
@@ -243,35 +332,41 @@ async def main():
         text = event.raw_text or ""
 
         if not text.strip():
+
             return
 
-        normalized_text = normalize_text(text)
+        normalized_text = normalize_text(
+            text
+        )
 
         matches = []
 
-        # -----------------------------------------------------
         # Поиск ключевых слов
-        # -----------------------------------------------------
 
         for keyword in keywords:
 
-            keyword_normalized = normalize_text(
-                keyword
+            keyword_normalized = (
+                normalize_text(keyword)
             )
 
             if not keyword_normalized:
+
                 continue
 
-            if keyword_normalized in normalized_text:
+            if (
+                keyword_normalized
+                in normalized_text
+            ):
 
-                matches.append(keyword)
+                matches.append(
+                    keyword
+                )
 
         if not matches:
+
             return
 
-        # -----------------------------------------------------
-        # Получаем информацию о канале
-        # -----------------------------------------------------
+        # Получаем канал
 
         try:
 
@@ -293,11 +388,11 @@ async def main():
 
         except Exception:
 
-            channel_title = "Неизвестный канал"
+            channel_title = (
+                "Неизвестный канал"
+            )
 
-        # -----------------------------------------------------
-        # ЛОГ
-        # -----------------------------------------------------
+        # Лог
 
         print()
         print("=" * 60, flush=True)
@@ -337,9 +432,7 @@ async def main():
 
         print("=" * 60, flush=True)
 
-        # -----------------------------------------------------
-        # Отправка через Telegram Bot
-        # -----------------------------------------------------
+        # Отправка через Telegram Bot API
 
         if bot_token and chat_id:
 
@@ -348,7 +441,10 @@ async def main():
             )
 
             safe_matches = "\n".join(
-                f"• {html.escape(str(match))}"
+                (
+                    f"• "
+                    f"{html.escape(str(match))}"
+                )
                 for match in matches
             )
 
@@ -368,11 +464,10 @@ async def main():
 
             try:
 
-                await client.send_message(
+                await send_telegram_message(
+                    bot_token,
                     chat_id,
                     message,
-                    parse_mode="html",
-                    bot_token=bot_token,
                 )
 
                 print(
@@ -384,7 +479,8 @@ async def main():
             except Exception as e:
 
                 print(
-                    "✗ Ошибка отправки уведомления: "
+                    "✗ Ошибка отправки "
+                    "уведомления: "
                     f"{type(e).__name__}: {e}",
                     flush=True,
                 )
@@ -392,13 +488,12 @@ async def main():
         else:
 
             print(
-                "⚠ bot_token или chat_id не настроены.",
+                "⚠ bot_token или chat_id "
+                "не настроены.",
                 flush=True,
             )
 
-    # ---------------------------------------------------------
-    # ГОТОВО
-    # ---------------------------------------------------------
+    # Готово
 
     print()
     print("=" * 60, flush=True)
@@ -409,12 +504,14 @@ async def main():
     print("=" * 60, flush=True)
 
     print(
-        f"Мониторинг каналов: {len(channel_entities)}",
+        f"Мониторинг каналов: "
+        f"{len(channel_entities)}",
         flush=True,
     )
 
     print(
-        f"Ключевых слов: {len(keywords)}",
+        f"Ключевых слов: "
+        f"{len(keywords)}",
         flush=True,
     )
 
@@ -430,4 +527,5 @@ async def main():
 
 
 if __name__ == "__main__":
+
     asyncio.run(main())
