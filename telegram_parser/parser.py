@@ -89,8 +89,9 @@ async def main():
         "",
     )
 
-    chat_id = int(
-        options.get("chat_id", 0)
+    chat_ids = options.get(
+        "chat_ids",
+        [],
     )
 
     channels = options.get(
@@ -103,7 +104,9 @@ async def main():
         [],
     )
 
+    # ---------------------------------------------------------
     # Проверка настроек
+    # ---------------------------------------------------------
 
     if not api_id:
 
@@ -141,7 +144,38 @@ async def main():
 
         sys.exit(1)
 
+    if not chat_ids:
+
+        print(
+            "ОШИБКА: список chat_ids пуст",
+            flush=True,
+        )
+
+        sys.exit(1)
+
+    # ---------------------------------------------------------
+    # Приводим chat_ids к int
+    # ---------------------------------------------------------
+
+    try:
+
+        chat_ids = [
+            int(chat_id)
+            for chat_id in chat_ids
+        ]
+
+    except (TypeError, ValueError):
+
+        print(
+            "ОШИБКА: один из chat_ids имеет неверный формат",
+            flush=True,
+        )
+
+        sys.exit(1)
+
+    # ---------------------------------------------------------
     # Вывод конфигурации
+    # ---------------------------------------------------------
 
     print(
         f"API ID: {api_id}",
@@ -149,6 +183,7 @@ async def main():
     )
 
     print()
+
     print(
         "Каналы мониторинга:",
         flush=True,
@@ -162,6 +197,7 @@ async def main():
         )
 
     print()
+
     print(
         "Ключевые слова:",
         flush=True,
@@ -176,7 +212,23 @@ async def main():
 
     print()
 
+    print(
+        "Получатели уведомлений:",
+        flush=True,
+    )
+
+    for chat_id in chat_ids:
+
+        print(
+            f"  • {chat_id}",
+            flush=True,
+        )
+
+    print()
+
+    # ---------------------------------------------------------
     # Telegram Client
+    # ---------------------------------------------------------
 
     client = TelegramClient(
         SESSION_FILE,
@@ -226,7 +278,9 @@ async def main():
 
     print()
 
+    # ---------------------------------------------------------
     # Подключаем каналы
+    # ---------------------------------------------------------
 
     channel_entities = []
 
@@ -310,6 +364,7 @@ async def main():
     if not channel_entities:
 
         print()
+
         print(
             "ОШИБКА: ни один канал "
             "не подключен.",
@@ -320,7 +375,9 @@ async def main():
 
         sys.exit(1)
 
+    # ---------------------------------------------------------
     # Обработчик новых сообщений
+    # ---------------------------------------------------------
 
     @client.on(
         events.NewMessage(
@@ -341,7 +398,9 @@ async def main():
 
         matches = []
 
+        # -----------------------------------------------------
         # Поиск ключевых слов
+        # -----------------------------------------------------
 
         for keyword in keywords:
 
@@ -366,7 +425,9 @@ async def main():
 
             return
 
-        # Получаем канал
+        # -----------------------------------------------------
+        # Получаем информацию о канале
+        # -----------------------------------------------------
 
         try:
 
@@ -392,14 +453,19 @@ async def main():
                 "Неизвестный канал"
             )
 
+        # -----------------------------------------------------
         # Лог
+        # -----------------------------------------------------
 
         print()
+
         print("=" * 60, flush=True)
+
         print(
             "🚨 НАЙДЕНО СОВПАДЕНИЕ",
             flush=True,
         )
+
         print("=" * 60, flush=True)
 
         print(
@@ -420,6 +486,7 @@ async def main():
             )
 
         print()
+
         print(
             "Сообщение:",
             flush=True,
@@ -432,75 +499,87 @@ async def main():
 
         print("=" * 60, flush=True)
 
-        # Отправка через Telegram Bot API
+        # -----------------------------------------------------
+        # Формируем сообщение
+        # -----------------------------------------------------
 
-        if bot_token and chat_id:
+        safe_channel = html.escape(
+            str(channel_title)
+        )
 
-            safe_channel = html.escape(
-                str(channel_title)
+        safe_matches = "\n".join(
+            (
+                f"• "
+                f"{html.escape(str(match))}"
             )
+            for match in matches
+        )
 
-            safe_matches = "\n".join(
-                (
-                    f"• "
-                    f"{html.escape(str(match))}"
-                )
-                for match in matches
-            )
+        safe_text = html.escape(
+            text
+        )
 
-            safe_text = html.escape(
-                text
-            )
+        message = (
+            "🚨 <b>НАЙДЕНО СОВПАДЕНИЕ</b>\n\n"
+            f"📢 <b>Канал:</b> "
+            f"{safe_channel}\n\n"
+            f"🔎 <b>Сработало:</b>\n"
+            f"{safe_matches}\n\n"
+            f"📝 <b>Сообщение:</b>\n"
+            f"{safe_text}"
+        )
 
-            message = (
-                "🚨 <b>НАЙДЕНО СОВПАДЕНИЕ</b>\n\n"
-                f"📢 <b>Канал:</b> "
-                f"{safe_channel}\n\n"
-                f"🔎 <b>Сработало:</b>\n"
-                f"{safe_matches}\n\n"
-                f"📝 <b>Сообщение:</b>\n"
-                f"{safe_text}"
-            )
+        # -----------------------------------------------------
+        # Отправляем всем получателям
+        # -----------------------------------------------------
 
-            try:
+        if bot_token:
 
-                await send_telegram_message(
-                    bot_token,
-                    chat_id,
-                    message,
-                )
+            for chat_id in chat_ids:
 
-                print(
-                    "✓ Уведомление отправлено "
-                    "через Telegram Bot",
-                    flush=True,
-                )
+                try:
 
-            except Exception as e:
+                    await send_telegram_message(
+                        bot_token,
+                        chat_id,
+                        message,
+                    )
 
-                print(
-                    "✗ Ошибка отправки "
-                    "уведомления: "
-                    f"{type(e).__name__}: {e}",
-                    flush=True,
-                )
+                    print(
+                        f"✓ Уведомление отправлено: "
+                        f"{chat_id}",
+                        flush=True,
+                    )
+
+                except Exception as e:
+
+                    print(
+                        f"✗ Ошибка отправки "
+                        f"{chat_id}: "
+                        f"{type(e).__name__}: {e}",
+                        flush=True,
+                    )
 
         else:
 
             print(
-                "⚠ bot_token или chat_id "
-                "не настроены.",
+                "⚠ bot_token не настроен.",
                 flush=True,
             )
 
+    # ---------------------------------------------------------
     # Готово
+    # ---------------------------------------------------------
 
     print()
+
     print("=" * 60, flush=True)
+
     print(
         " ПАРСЕР ЗАПУЩЕН",
         flush=True,
     )
+
     print("=" * 60, flush=True)
 
     print(
@@ -515,7 +594,14 @@ async def main():
         flush=True,
     )
 
+    print(
+        f"Получателей: "
+        f"{len(chat_ids)}",
+        flush=True,
+    )
+
     print()
+
     print(
         "Ожидаем новые сообщения...",
         flush=True,
