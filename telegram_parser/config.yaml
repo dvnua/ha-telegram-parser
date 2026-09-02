@@ -11,6 +11,10 @@ startup: application
 boot: auto
 init: false
 
+map:
+  - type: share
+    read_only: false
+
 options:
   api_id: 0
   api_hash: ""
