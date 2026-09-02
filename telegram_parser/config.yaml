@@ -1,5 +1,5 @@
 name: Telegram Channel Parser
-version: "1.2.3"
+version: "1.2.4"
 slug: telegram_channel_parser
 description: Парсер Telegram-каналов через Telethon
 url: https://github.com/dvnua/ha-telegram-parser
@@ -19,7 +19,7 @@ options:
   api_id: 0
   api_hash: ""
   bot_token: ""
-  chat_ids: []
+  chat_ids: ""
   channels: []
   keywords: []
 
@@ -27,9 +27,7 @@ schema:
   api_id: int
   api_hash: str
   bot_token: password
-
-  chat_ids:
-    - int
+  chat_ids: str
 
   channels:
     - str
