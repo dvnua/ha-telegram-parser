@@ -16,111 +16,7 @@ def load_options():
 
 
 def normalize_text(text):
-    """
-    Приводит текст к нижнему регистру
-    и убирает лишние пробелы.
-    """
     return " ".join(text.lower().split())
-
-
-def normalize_keyword(keyword):
-    return normalize_text(keyword)
-
-
-def parse_combinations(combinations):
-    """
-    Преобразует:
-
-    "реактиви + Київ"
-    "ракета + Київ + пуск"
-
-    в:
-
-    [
-        ["реактиви", "київ"],
-        ["ракета", "київ", "пуск"]
-    ]
-    """
-
-    result = []
-
-    for combination in combinations:
-
-        if not combination:
-            continue
-
-        parts = combination.split("+")
-
-        words = []
-
-        for part in parts:
-            part = normalize_keyword(part)
-
-            if part:
-                words.append(part)
-
-        if words:
-            result.append(words)
-
-    return result
-
-
-def find_matches(text, keywords, combinations):
-    """
-    Проверяет ОДНО конкретное сообщение.
-
-    Возвращает список сработавших условий.
-    """
-
-    normalized_text = normalize_text(text)
-
-    matches = []
-
-    # ---------------------------------------------------------
-    # Одиночные ключевые слова
-    # ---------------------------------------------------------
-
-    for keyword in keywords:
-
-        keyword_normalized = normalize_keyword(keyword)
-
-        if not keyword_normalized:
-            continue
-
-        if keyword_normalized in normalized_text:
-
-            matches.append(
-                {
-                    "type": "keyword",
-                    "condition": keyword,
-                }
-            )
-
-    # ---------------------------------------------------------
-    # Комбинации
-    #
-    # ВСЕ слова должны присутствовать
-    # В ЭТОМ ЖЕ СООБЩЕНИИ.
-    # ---------------------------------------------------------
-
-    for combination in combinations:
-
-        if not combination:
-            continue
-
-        if all(
-            word in normalized_text
-            for word in combination
-        ):
-
-            matches.append(
-                {
-                    "type": "combination",
-                    "condition": " + ".join(combination),
-                }
-            )
-
-    return matches
 
 
 async def main():
@@ -139,7 +35,6 @@ async def main():
 
     channels = options.get("channels", [])
     keywords = options.get("keywords", [])
-    combinations_raw = options.get("combinations", [])
 
     # ---------------------------------------------------------
     # Проверка настроек
@@ -157,20 +52,12 @@ async def main():
         print("ОШИБКА: список channels пуст", flush=True)
         sys.exit(1)
 
-    if not keywords and not combinations_raw:
+    if not keywords:
         print(
-            "ОШИБКА: не указаны keywords или combinations",
+            "ОШИБКА: список keywords пуст",
             flush=True,
         )
         sys.exit(1)
-
-    # ---------------------------------------------------------
-    # Разбираем комбинации
-    # ---------------------------------------------------------
-
-    combinations = parse_combinations(
-        combinations_raw
-    )
 
     # ---------------------------------------------------------
     # Вывод конфигурации
@@ -188,6 +75,7 @@ async def main():
     )
 
     for channel in channels:
+
         print(
             f"  • {channel}",
             flush=True,
@@ -195,41 +83,14 @@ async def main():
 
     print()
     print(
-        "Одиночные ключевые слова:",
+        "Ключевые слова:",
         flush=True,
     )
 
-    if keywords:
+    for keyword in keywords:
 
-        for keyword in keywords:
-            print(
-                f"  • {keyword}",
-                flush=True,
-            )
-
-    else:
         print(
-            "  • нет",
-            flush=True,
-        )
-
-    print()
-    print(
-        "Комбинации:",
-        flush=True,
-    )
-
-    if combinations:
-
-        for combination in combinations:
-            print(
-                f"  • {' + '.join(combination)}",
-                flush=True,
-            )
-
-    else:
-        print(
-            "  • нет",
+            f"  • {keyword}",
             flush=True,
         )
 
@@ -384,15 +245,26 @@ async def main():
         if not text.strip():
             return
 
+        normalized_text = normalize_text(text)
+
+        matches = []
+
         # -----------------------------------------------------
-        # Ищем совпадения ТОЛЬКО в текущем сообщении
+        # Поиск ключевых слов
         # -----------------------------------------------------
 
-        matches = find_matches(
-            text,
-            keywords,
-            combinations,
-        )
+        for keyword in keywords:
+
+            keyword_normalized = normalize_text(
+                keyword
+            )
+
+            if not keyword_normalized:
+                continue
+
+            if keyword_normalized in normalized_text:
+
+                matches.append(keyword)
 
         if not matches:
             return
@@ -424,31 +296,6 @@ async def main():
             channel_title = "Неизвестный канал"
 
         # -----------------------------------------------------
-        # Формируем список условий
-        # -----------------------------------------------------
-
-        conditions = []
-
-        for match in matches:
-
-            if match["type"] == "keyword":
-
-                conditions.append(
-                    f"слово: {match['condition']}"
-                )
-
-            elif match["type"] == "combination":
-
-                conditions.append(
-                    f"комбинация: {match['condition']}"
-                )
-
-        conditions_text = "\n".join(
-            f"• {condition}"
-            for condition in conditions
-        )
-
-        # -----------------------------------------------------
         # ЛОГ
         # -----------------------------------------------------
 
@@ -470,10 +317,12 @@ async def main():
             flush=True,
         )
 
-        print(
-            conditions_text,
-            flush=True,
-        )
+        for match in matches:
+
+            print(
+                f"• {match}",
+                flush=True,
+            )
 
         print()
         print(
@@ -498,8 +347,9 @@ async def main():
                 str(channel_title)
             )
 
-            safe_conditions = html.escape(
-                conditions_text
+            safe_matches = "\n".join(
+                f"• {html.escape(str(match))}"
+                for match in matches
             )
 
             safe_text = html.escape(
@@ -511,7 +361,7 @@ async def main():
                 f"📢 <b>Канал:</b> "
                 f"{safe_channel}\n\n"
                 f"🔎 <b>Сработало:</b>\n"
-                f"{safe_conditions}\n\n"
+                f"{safe_matches}\n\n"
                 f"📝 <b>Сообщение:</b>\n"
                 f"{safe_text}"
             )
@@ -564,12 +414,7 @@ async def main():
     )
 
     print(
-        f"Одиночных слов: {len(keywords)}",
-        flush=True,
-    )
-
-    print(
-        f"Комбинаций: {len(combinations)}",
+        f"Ключевых слов: {len(keywords)}",
         flush=True,
     )
 
