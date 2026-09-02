@@ -5,4 +5,4 @@ echo " Telegram Channel Parser"
 echo " Starting..."
 echo "========================================"
 
-python3 /app/parser.py
+python3 -u /app/parser.py
